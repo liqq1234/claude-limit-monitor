@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rate Limit Monitor 测试页面</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        button.danger {
+            background: #dc3545;
+        }
+        
+        button.danger:hover {
+            background: #c82333;
+        }
+        
+        .log {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚫 Rate Limit Monitor 测试页面</h1>
+    
+    <div class="container">
+        <h2>插件状态检查</h2>
+        <div id="extension-status" class="status info">检查中...</div>
+        <button onclick="checkExtensionStatus()">重新检查</button>
+    </div>
+    
+    <div class="container">
+        <h2>模拟429错误测试</h2>
+        <p>点击下面的按钮来模拟不同类型的429错误响应：</p>
+        
+        <button onclick="simulateClaudeRateLimit()">模拟 Claude API 429</button>
+        <button onclick="simulateOpenAIRateLimit()">模拟 OpenAI API 429</button>
+        <button onclick="simulateGenericRateLimit()">模拟通用 429</button>
+        <button onclick="simulateHeaderRateLimit()">模拟响应头 429</button>
+        
+        <div id="test-status" class="status" style="display: none;"></div>
+    </div>
+    
+    <div class="container">
+        <h2>手动触发事件</h2>
+        <p>直接触发rate limit事件（不发送HTTP请求）：</p>
+        
+        <button onclick="triggerRateLimitEvent()">触发Rate Limit事件</button>
+        <button onclick="triggerRateLimitWithTime()">触发带时间戳事件</button>
+        <button class="danger" onclick="clearRateLimit()">清除Rate Limit</button>
+    </div>
+    
+    <div class="container">
+        <h2>日志输出</h2>
+        <button onclick="clearLog()">清除日志</button>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        // 日志函数
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${type.toUpperCase()}: ${message}\n`;
+            logEl.textContent += logMessage;
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(logMessage);
+        }
+        
+        function clearLog() {
+            document.getElementById('log').textContent = '';
+        }
+        
+        // 检查扩展状态
+        function checkExtensionStatus() {
+            const statusEl = document.getElementById('extension-status');
+            
+            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+                statusEl.textContent = '✅ Chrome扩展环境正常';
+                statusEl.className = 'status success';
+                log('Chrome扩展环境检查通过');
+                
+                // 检查是否有注入脚本
+                if (window.fetch.toString().includes('originalFetch')) {
+                    log('✅ Fetch拦截器已安装');
+                } else {
+                    log('❌ Fetch拦截器未检测到');
+                }
+                
+            } else {
+                statusEl.textContent = '❌ 请在Chrome扩展环境中运行此页面';
+                statusEl.className = 'status error';
+                log('Chrome扩展环境检查失败');
+            }
+        }
+        
+        // 模拟Claude API 429错误
+        async function simulateClaudeRateLimit() {
+            log('开始模拟Claude API 429错误...');
+            
+            // 创建模拟的429响应
+            const mockResponse = new Response(
+                JSON.stringify({
+                    type: 'error',
+                    error: {
+                        type: 'rate_limit_error',
+                        message: JSON.stringify({
+                            type: 'exceeded_limit',
+                            resetsAt: Math.floor(Date.now() / 1000) + 300 // 5分钟后重置
+                        })
+                    }
+                }),
+                {
+                    status: 429,
+                    statusText: 'Too Many Requests',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            
+            // 手动触发fetch拦截器的逻辑
+            window.dispatchEvent(new CustomEvent('rateLimitDetected', {
+                detail: {
+                    url: 'https://claude.ai/api/organizations/test/completion',
+                    domain: 'claude.ai',
+                    resetAt: Math.floor(Date.now() / 1000) + 300,
+                    status: 429,
+                    timestamp: Date.now(),
+                    source: 'test'
+                }
+            }));
+            
+            showTestStatus('Claude API 429错误已模拟', 'success');
+            log('Claude API 429错误模拟完成');
+        }
+        
+        // 模拟OpenAI API 429错误
+        async function simulateOpenAIRateLimit() {
+            log('开始模拟OpenAI API 429错误...');
+            
+            window.dispatchEvent(new CustomEvent('rateLimitDetected', {
+                detail: {
+                    url: 'https://api.openai.com/v1/chat/completions',
+                    domain: 'api.openai.com',
+                    resetAt: Math.floor(Date.now() / 1000) + 600, // 10分钟后重置
+                    status: 429,
+                    timestamp: Date.now(),
+                    source: 'test'
+                }
+            }));
+            
+            showTestStatus('OpenAI API 429错误已模拟', 'success');
+            log('OpenAI API 429错误模拟完成');
+        }
+        
+        // 模拟通用429错误
+        async function simulateGenericRateLimit() {
+            log('开始模拟通用429错误...');
+            
+            window.dispatchEvent(new CustomEvent('rateLimitDetected', {
+                detail: {
+                    url: 'https://api.example.com/test',
+                    domain: 'api.example.com',
+                    resetAt: Math.floor(Date.now() / 1000) + 120, // 2分钟后重置
+                    status: 429,
+                    timestamp: Date.now(),
+                    source: 'test'
+                }
+            }));
+            
+            showTestStatus('通用429错误已模拟', 'success');
+            log('通用429错误模拟完成');
+        }
+        
+        // 模拟响应头429错误
+        async function simulateHeaderRateLimit() {
+            log('开始模拟响应头429错误...');
+            
+            window.dispatchEvent(new CustomEvent('rateLimitDetected', {
+                detail: {
+                    url: 'https://api.test.com/endpoint',
+                    domain: 'api.test.com',
+                    resetAt: Math.floor(Date.now() / 1000) + 180, // 3分钟后重置
+                    status: 429,
+                    headers: {
+                        'x-ratelimit-reset': Math.floor(Date.now() / 1000) + 180,
+                        'retry-after': '180'
+                    },
+                    timestamp: Date.now(),
+                    source: 'test'
+                }
+            }));
+            
+            showTestStatus('响应头429错误已模拟', 'success');
+            log('响应头429错误模拟完成');
+        }
+        
+        // 直接触发rate limit事件
+        function triggerRateLimitEvent() {
+            log('触发基本Rate Limit事件...');
+            
+            window.dispatchEvent(new CustomEvent('rateLimitDetected', {
+                detail: {
+                    url: window.location.href,
+                    domain: window.location.hostname,
+                    resetAt: null,
+                    status: 429,
+                    timestamp: Date.now(),
+                    source: 'manual'
+                }
+            }));
+            
+            showTestStatus('Rate Limit事件已触发', 'success');
+            log('Rate Limit事件触发完成');
+        }
+        
+        // 触发带时间戳的rate limit事件
+        function triggerRateLimitWithTime() {
+            log('触发带时间戳的Rate Limit事件...');
+            
+            const resetAt = Math.floor(Date.now() / 1000) + 60; // 1分钟后重置
+            
+            window.dispatchEvent(new CustomEvent('rateLimitDetected', {
+                detail: {
+                    url: window.location.href,
+                    domain: window.location.hostname,
+                    resetAt: resetAt,
+                    status: 429,
+                    timestamp: Date.now(),
+                    source: 'manual'
+                }
+            }));
+            
+            showTestStatus(`Rate Limit事件已触发，重置时间: ${new Date(resetAt * 1000).toLocaleTimeString()}`, 'success');
+            log(`带时间戳的Rate Limit事件触发完成，重置时间: ${resetAt}`);
+        }
+        
+        // 清除rate limit
+        function clearRateLimit() {
+            log('清除Rate Limit...');
+            
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                chrome.runtime.sendMessage({
+                    type: 'CLEAR_RATE_LIMIT',
+                    domain: window.location.hostname
+                }, (response) => {
+                    if (response && response.success) {
+                        showTestStatus('Rate Limit已清除', 'success');
+                        log('Rate Limit清除成功');
+                    } else {
+                        showTestStatus('Rate Limit清除失败', 'error');
+                        log('Rate Limit清除失败');
+                    }
+                });
+            } else {
+                showTestStatus('无法清除Rate Limit - 扩展环境不可用', 'error');
+                log('Rate Limit清除失败 - 扩展环境不可用');
+            }
+        }
+        
+        // 显示测试状态
+        function showTestStatus(message, type) {
+            const statusEl = document.getElementById('test-status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+            statusEl.style.display = 'block';
+            
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 3000);
+        }
+        
+        // 页面加载时检查状态
+        document.addEventListener('DOMContentLoaded', () => {
+            checkExtensionStatus();
+            log('测试页面加载完成');
+            
+            // 监听rate limit事件
+            window.addEventListener('rateLimitDetected', (event) => {
+                log(`检测到Rate Limit事件: ${JSON.stringify(event.detail, null, 2)}`);
+            });
+        });
+    </script>
+</body>
+</html>

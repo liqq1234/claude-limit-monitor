@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FuClaude Demo Rate Limit Monitor 测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background: #f5f5f5;
+        }
+        
+        .header {
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+        
+        .container {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        button:hover {
+            background: #5a6fd8;
+            transform: translateY(-1px);
+        }
+        
+        button.danger {
+            background: #e74c3c;
+        }
+        
+        button.danger:hover {
+            background: #c0392b;
+        }
+        
+        button.success {
+            background: #27ae60;
+        }
+        
+        button.success:hover {
+            background: #229954;
+        }
+        
+        .log {
+            background: #2c3e50;
+            color: #ecf0f1;
+            border: none;
+            padding: 20px;
+            border-radius: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: 500;
+        }
+        
+        .status.success {
+            background: #d5f4e6;
+            color: #27ae60;
+            border: 1px solid #27ae60;
+        }
+        
+        .status.error {
+            background: #fadbd8;
+            color: #e74c3c;
+            border: 1px solid #e74c3c;
+        }
+        
+        .status.info {
+            background: #d6eaf8;
+            color: #3498db;
+            border: 1px solid #3498db;
+        }
+        
+        .status.warning {
+            background: #fcf3cf;
+            color: #f39c12;
+            border: 1px solid #f39c12;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .emoji {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1><span class="emoji">🚀</span>FuClaude Demo Rate Limit Monitor</h1>
+        <p>专为 demo.fuclaude.com 设计的429监控测试页面</p>
+    </div>
+    
+    <div class="container">
+        <h2><span class="emoji">🔍</span>插件状态检查</h2>
+        <div id="extension-status" class="status info">正在检查插件状态...</div>
+        <button onclick="checkExtensionStatus()">🔄 重新检查</button>
+        <button onclick="checkDomainSupport()">🌐 检查域名支持</button>
+    </div>
+    
+    <div class="container">
+        <h2><span class="emoji">⚡</span>FuClaude API 模拟测试</h2>
+        <p>模拟 demo.fuclaude.com 的各种429错误场景：</p>
+        
+        <div class="grid">
+            <div class="card">
+                <h4>🤖 Chat API 限制</h4>
+                <button onclick="simulateFuClaudeChatLimit()">模拟聊天限制</button>
+            </div>
+            
+            <div class="card">
+                <h4>📝 Completion API 限制</h4>
+                <button onclick="simulateFuClaudeCompletionLimit()">模拟补全限制</button>
+            </div>
+            
+            <div class="card">
+                <h4>🔄 重试限制</h4>
+                <button onclick="simulateFuClaudeRetryLimit()">模拟重试限制</button>
+            </div>
+            
+            <div class="card">
+                <h4>⚠️ 频率限制</h4>
+                <button onclick="simulateFuClaudeRateLimit()">模拟频率限制</button>
+            </div>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <button onclick="simulateMultipleLimits()" class="warning">🔥 模拟多重限制</button>
+            <button onclick="simulateLongTermLimit()" class="danger">⏰ 模拟长期限制</button>
+            <button onclick="testSpecificUrl()" class="success">🎯 测试你的URL格式</button>
+        </div>
+        
+        <div id="test-status" class="status" style="display: none;"></div>
+    </div>
+    
+    <div class="container">
+        <h2><span class="emoji">🛠️</span>手动控制</h2>
+        <p>手动触发和管理rate limit事件：</p>
+        
+        <button onclick="triggerCustomRateLimit()" class="success">✨ 自定义限制</button>
+        <button onclick="triggerShortLimit()">⚡ 短期限制 (30秒)</button>
+        <button onclick="triggerMediumLimit()">⏱️ 中期限制 (5分钟)</button>
+        <button onclick="triggerLongLimit()">🕐 长期限制 (1小时)</button>
+        <button onclick="clearAllLimits()" class="danger">🗑️ 清除所有限制</button>
+    </div>
+    
+    <div class="container">
+        <h2><span class="emoji">📊</span>实时监控</h2>
+        <div id="monitor-info" class="status info">
+            当前域名: <strong>demo.fuclaude.com</strong><br>
+            监控状态: <span id="monitor-status">等待中...</span><br>
+            检测到的限制: <span id="detected-limits">0</span>
+        </div>
+        <button onclick="startMonitoring()">▶️ 开始监控</button>
+        <button onclick="stopMonitoring()">⏸️ 停止监控</button>
+        <button onclick="getStorageInfo()">💾 查看存储</button>
+    </div>
+    
+    <div class="container">
+        <h2><span class="emoji">📝</span>日志输出</h2>
+        <button onclick="clearLog()">🧹 清除日志</button>
+        <button onclick="exportLog()">📤 导出日志</button>
+        <div id="log" class="log">等待日志输出...</div>
+    </div>
+
+    <script>
+        let monitoringActive = false;
+        let detectedLimitsCount = 0;
+        
+        // 日志函数
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const emoji = {
+                'info': 'ℹ️',
+                'success': '✅',
+                'error': '❌',
+                'warning': '⚠️'
+            }[type] || 'ℹ️';
+            
+            const logMessage = `[${timestamp}] ${emoji} ${message}\n`;
+            logEl.textContent += logMessage;
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[FuClaude Monitor] ${message}`);
+        }
+        
+        function clearLog() {
+            document.getElementById('log').textContent = '日志已清除...\n';
+        }
+        
+        function exportLog() {
+            const logContent = document.getElementById('log').textContent;
+            const blob = new Blob([logContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `fuclaude-monitor-log-${new Date().toISOString().slice(0,19)}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+            log('日志已导出', 'success');
+        }
+        
+        // 检查扩展状态
+        function checkExtensionStatus() {
+            const statusEl = document.getElementById('extension-status');
+            
+            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+                statusEl.textContent = '✅ Chrome扩展环境正常 - Rate Limit Monitor已加载';
+                statusEl.className = 'status success';
+                log('Chrome扩展环境检查通过', 'success');
+                
+                // 检查fetch拦截器
+                if (window.fetch.toString().includes('originalFetch')) {
+                    log('✅ Fetch拦截器已安装并运行', 'success');
+                } else {
+                    log('❌ Fetch拦截器未检测到，可能需要刷新页面', 'warning');
+                }
+                
+            } else {
+                statusEl.textContent = '❌ 请确保在安装了Rate Limit Monitor扩展的Chrome中运行';
+                statusEl.className = 'status error';
+                log('Chrome扩展环境检查失败', 'error');
+            }
+        }
+        
+        // 检查域名支持
+        function checkDomainSupport() {
+            const currentDomain = window.location.hostname;
+            log(`当前域名: ${currentDomain}`, 'info');
+            
+            if (currentDomain === 'demo.fuclaude.com') {
+                log('✅ 当前在目标域名 demo.fuclaude.com', 'success');
+                showTestStatus('✅ 域名匹配正确', 'success');
+            } else {
+                log(`⚠️ 当前域名 ${currentDomain} 不是 demo.fuclaude.com`, 'warning');
+                log('建议: 将此页面部署到 demo.fuclaude.com 或修改hosts文件', 'info');
+                showTestStatus('⚠️ 建议在 demo.fuclaude.com 域名下测试', 'warning');
+            }
+        }
+        
+        // FuClaude 特定的模拟函数
+        function simulateFuClaudeChatLimit() {
+            log('模拟 FuClaude Chat API 429限制...', 'info');
+
+            const resetAt = Math.floor(Date.now() / 1000) + 300; // 5分钟后
+            const orgId = '7b8556b4-d293-4e5c-af82-ba03e4d26238';
+            const conversationId = '05c992c8-0f5a-4295-9a3f-e2e8e75c5dcc';
+
+            triggerRateLimitEvent({
+                url: `https://demo.fuclaude.com/api/organizations/${orgId}/chat_conversations/${conversationId}/completion`,
+                domain: 'demo.fuclaude.com',
+                resetAt: resetAt,
+                status: 429,
+                responseData: {
+                    type: 'error',
+                    error: {
+                        type: 'rate_limit_error',
+                        message: JSON.stringify({
+                            type: 'exceeded_limit',
+                            resetsAt: resetAt,
+                            reason: 'Chat completion rate limit exceeded'
+                        })
+                    }
+                },
+                orgId: orgId,
+                conversationId: conversationId,
+                apiType: 'fuclaude-chat',
+                source: 'fuclaude-chat'
+            });
+
+            showTestStatus('🤖 FuClaude Chat API 限制已模拟 (5分钟)', 'error');
+            log(`FuClaude Chat API 429限制模拟完成 - 组织: ${orgId.substring(0,8)}...`, 'success');
+        }
+        
+        function simulateFuClaudeCompletionLimit() {
+            log('模拟 FuClaude Completion API 429限制...', 'info');
+            
+            const resetAt = Math.floor(Date.now() / 1000) + 600; // 10分钟后
+            triggerRateLimitEvent({
+                url: 'https://demo.fuclaude.com/api/completions',
+                domain: 'demo.fuclaude.com',
+                resetAt: resetAt,
+                status: 429,
+                headers: {
+                    'x-ratelimit-reset': resetAt.toString(),
+                    'x-ratelimit-remaining': '0'
+                },
+                source: 'fuclaude-completion'
+            });
+            
+            showTestStatus('📝 FuClaude Completion API 限制已模拟 (10分钟)', 'error');
+            log('FuClaude Completion API 429限制模拟完成', 'success');
+        }
+        
+        function simulateFuClaudeRetryLimit() {
+            log('模拟 FuClaude 重试限制...', 'info');
+            
+            const resetAt = Math.floor(Date.now() / 1000) + 120; // 2分钟后
+            triggerRateLimitEvent({
+                url: 'https://demo.fuclaude.com/api/retry',
+                domain: 'demo.fuclaude.com',
+                resetAt: resetAt,
+                status: 429,
+                responseData: {
+                    type: 'error',
+                    error: {
+                        type: 'rate_limit_error',
+                        message: JSON.stringify({
+                            type: 'exceeded_limit',
+                            resetsAt: resetAt,
+                            reason: 'Too many retry attempts'
+                        })
+                    }
+                },
+                source: 'fuclaude-retry'
+            });
+            
+            showTestStatus('🔄 FuClaude 重试限制已模拟 (2分钟)', 'error');
+            log('FuClaude 重试限制模拟完成', 'success');
+        }
+        
+        function simulateFuClaudeRateLimit() {
+            log('模拟 FuClaude 频率限制...', 'info');
+            
+            const resetAt = Math.floor(Date.now() / 1000) + 900; // 15分钟后
+            triggerRateLimitEvent({
+                url: 'https://demo.fuclaude.com/api/generate',
+                domain: 'demo.fuclaude.com',
+                resetAt: resetAt,
+                status: 429,
+                headers: {
+                    'retry-after': '900'
+                },
+                responseData: {
+                    error: 'Rate limit exceeded',
+                    reset_time: resetAt
+                },
+                source: 'fuclaude-rate'
+            });
+            
+            showTestStatus('⚠️ FuClaude 频率限制已模拟 (15分钟)', 'error');
+            log('FuClaude 频率限制模拟完成', 'success');
+        }
+        
+        // 复杂场景模拟
+        function simulateMultipleLimits() {
+            log('模拟多重限制场景...', 'warning');
+            
+            const limits = [
+                { api: 'chat', delay: 0, duration: 180 },
+                { api: 'completion', delay: 2000, duration: 300 },
+                { api: 'retry', delay: 4000, duration: 60 }
+            ];
+            
+            limits.forEach((limit, index) => {
+                setTimeout(() => {
+                    const resetAt = Math.floor(Date.now() / 1000) + limit.duration;
+                    triggerRateLimitEvent({
+                        url: `https://demo.fuclaude.com/api/${limit.api}`,
+                        domain: 'demo.fuclaude.com',
+                        resetAt: resetAt,
+                        status: 429,
+                        source: `fuclaude-multi-${limit.api}`
+                    });
+                    log(`多重限制 ${index + 1}/3: ${limit.api} API (${limit.duration}秒)`, 'warning');
+                }, limit.delay);
+            });
+            
+            showTestStatus('🔥 多重限制场景已启动', 'warning');
+        }
+        
+        function simulateLongTermLimit() {
+            log('模拟长期限制 (1小时)...', 'error');
+            
+            const resetAt = Math.floor(Date.now() / 1000) + 3600; // 1小时后
+            triggerRateLimitEvent({
+                url: 'https://demo.fuclaude.com/api/premium',
+                domain: 'demo.fuclaude.com',
+                resetAt: resetAt,
+                status: 429,
+                responseData: {
+                    error: {
+                        type: 'quota_exceeded',
+                        message: 'Daily quota exceeded',
+                        reset_time: resetAt
+                    }
+                },
+                source: 'fuclaude-longterm'
+            });
+            
+            showTestStatus('⏰ 长期限制已模拟 (1小时)', 'error');
+            log('长期限制模拟完成', 'success');
+        }
+
+        // 测试你的具体URL格式
+        function testSpecificUrl() {
+            log('测试你的具体URL格式...', 'info');
+
+            const orgId = '7b8556b4-d293-4e5c-af82-ba03e4d26238';
+            const conversationId = '05c992c8-0f5a-4295-9a3f-e2e8e75c5dcc';
+            const resetAt = Math.floor(Date.now() / 1000) + 180; // 3分钟后
+
+            const testUrl = `https://demo.fuclaude.com/api/organizations/${orgId}/chat_conversations/${conversationId}/completion`;
+
+            log(`测试URL: ${testUrl}`, 'info');
+            log(`组织ID: ${orgId}`, 'info');
+            log(`会话ID: ${conversationId}`, 'info');
+
+            triggerRateLimitEvent({
+                url: testUrl,
+                domain: 'demo.fuclaude.com',
+                resetAt: resetAt,
+                status: 429,
+                responseData: {
+                    type: 'error',
+                    error: {
+                        type: 'rate_limit_error',
+                        message: JSON.stringify({
+                            type: 'exceeded_limit',
+                            resetsAt: resetAt,
+                            reason: 'Completion API rate limit exceeded',
+                            organization_id: orgId,
+                            conversation_id: conversationId
+                        })
+                    }
+                },
+                orgId: orgId,
+                conversationId: conversationId,
+                apiType: 'fuclaude-chat',
+                headers: {
+                    'x-ratelimit-reset': resetAt.toString(),
+                    'x-ratelimit-remaining': '0',
+                    'x-ratelimit-limit': '50'
+                },
+                source: 'specific-url-test'
+            });
+
+            showTestStatus(`🎯 你的URL格式测试完成 (3分钟) - 组织: ${orgId.substring(0,8)}...`, 'success');
+            log('具体URL格式测试完成', 'success');
+        }
+        
+        // 通用函数
+        function triggerRateLimitEvent(data) {
+            window.dispatchEvent(new CustomEvent('rateLimitDetected', {
+                detail: {
+                    timestamp: Date.now(),
+                    ...data
+                }
+            }));
+            
+            detectedLimitsCount++;
+            document.getElementById('detected-limits').textContent = detectedLimitsCount;
+        }
+        
+        function triggerCustomRateLimit() {
+            const duration = prompt('请输入限制持续时间（秒）:', '300');
+            if (duration && !isNaN(duration)) {
+                const resetAt = Math.floor(Date.now() / 1000) + parseInt(duration);
+                triggerRateLimitEvent({
+                    url: 'https://demo.fuclaude.com/api/custom',
+                    domain: 'demo.fuclaude.com',
+                    resetAt: resetAt,
+                    status: 429,
+                    source: 'custom'
+                });
+                showTestStatus(`✨ 自定义限制已设置 (${duration}秒)`, 'info');
+                log(`自定义限制设置: ${duration}秒`, 'info');
+            }
+        }
+        
+        function triggerShortLimit() {
+            const resetAt = Math.floor(Date.now() / 1000) + 30;
+            triggerRateLimitEvent({
+                url: 'https://demo.fuclaude.com/api/short',
+                domain: 'demo.fuclaude.com',
+                resetAt: resetAt,
+                status: 429,
+                source: 'short'
+            });
+            showTestStatus('⚡ 短期限制已设置 (30秒)', 'warning');
+            log('短期限制设置完成', 'info');
+        }
+        
+        function triggerMediumLimit() {
+            const resetAt = Math.floor(Date.now() / 1000) + 300;
+            triggerRateLimitEvent({
+                url: 'https://demo.fuclaude.com/api/medium',
+                domain: 'demo.fuclaude.com',
+                resetAt: resetAt,
+                status: 429,
+                source: 'medium'
+            });
+            showTestStatus('⏱️ 中期限制已设置 (5分钟)', 'warning');
+            log('中期限制设置完成', 'info');
+        }
+        
+        function triggerLongLimit() {
+            const resetAt = Math.floor(Date.now() / 1000) + 3600;
+            triggerRateLimitEvent({
+                url: 'https://demo.fuclaude.com/api/long',
+                domain: 'demo.fuclaude.com',
+                resetAt: resetAt,
+                status: 429,
+                source: 'long'
+            });
+            showTestStatus('🕐 长期限制已设置 (1小时)', 'error');
+            log('长期限制设置完成', 'info');
+        }
+        
+        function clearAllLimits() {
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                chrome.runtime.sendMessage({
+                    type: 'CLEAR_ALL_RATE_LIMITS'
+                }, (response) => {
+                    if (response && response.success) {
+                        showTestStatus('🗑️ 所有限制已清除', 'success');
+                        log('所有限制清除成功', 'success');
+                        detectedLimitsCount = 0;
+                        document.getElementById('detected-limits').textContent = '0';
+                    } else {
+                        showTestStatus('❌ 清除失败', 'error');
+                        log('限制清除失败', 'error');
+                    }
+                });
+            } else {
+                showTestStatus('❌ 扩展环境不可用', 'error');
+                log('清除失败 - 扩展环境不可用', 'error');
+            }
+        }
+        
+        // 监控功能
+        function startMonitoring() {
+            monitoringActive = true;
+            document.getElementById('monitor-status').textContent = '🟢 监控中...';
+            log('开始实时监控 demo.fuclaude.com', 'info');
+            
+            // 模拟监控活动
+            const monitorInterval = setInterval(() => {
+                if (!monitoringActive) {
+                    clearInterval(monitorInterval);
+                    return;
+                }
+                
+                // 随机模拟检测到请求
+                if (Math.random() < 0.1) { // 10% 概率
+                    log(`监控到请求: ${new Date().toLocaleTimeString()}`, 'info');
+                }
+            }, 2000);
+        }
+        
+        function stopMonitoring() {
+            monitoringActive = false;
+            document.getElementById('monitor-status').textContent = '🔴 已停止';
+            log('监控已停止', 'warning');
+        }
+        
+        function getStorageInfo() {
+            if (typeof chrome !== 'undefined' && chrome.storage) {
+                chrome.storage.local.get(null, (result) => {
+                    const rateLimitKeys = Object.keys(result).filter(key => key.startsWith('rateLimit_'));
+                    log(`存储信息: 共 ${rateLimitKeys.length} 个限制记录`, 'info');
+                    rateLimitKeys.forEach(key => {
+                        const data = result[key];
+                        const domain = key.replace('rateLimit_', '');
+                        const resetTime = new Date(data.resetAt * 1000).toLocaleString();
+                        log(`- ${domain}: 重置时间 ${resetTime}`, 'info');
+                    });
+                });
+            } else {
+                log('无法访问Chrome存储', 'error');
+            }
+        }
+        
+        function showTestStatus(message, type) {
+            const statusEl = document.getElementById('test-status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+            statusEl.style.display = 'block';
+            
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 4000);
+        }
+        
+        // 页面加载时的初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            checkExtensionStatus();
+            checkDomainSupport();
+            log('FuClaude Demo 测试页面加载完成', 'success');
+            log('准备测试 demo.fuclaude.com 的Rate Limit监控功能', 'info');
+            
+            // 监听rate limit事件
+            window.addEventListener('rateLimitDetected', (event) => {
+                log(`🚨 检测到Rate Limit: ${JSON.stringify(event.detail, null, 2)}`, 'warning');
+                detectedLimitsCount++;
+                document.getElementById('detected-limits').textContent = detectedLimitsCount;
+            });
+        });
+    </script>
+</body>
+</html>

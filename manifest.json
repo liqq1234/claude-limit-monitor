@@ -1,0 +1,62 @@
+{
+  "manifest_version": 3,
+  "name": "Rate Limit Monitor",
+  "version": "1.0.0",
+  "description": "监控429状态码并显示API限制恢复时间",
+  "author": "Rate Limit Monitor",
+  
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  
+  "content_scripts": [
+    {
+      "matches": [
+        "https://claude.ai/*",
+        "https://api.anthropic.com/*",
+        "https://chatgpt.com/*",
+        "https://api.openai.com/*",
+        "https://demo.fuclaude.com/*",
+        "*://*/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  
+  "host_permissions": [
+    "*://*/*"
+  ],
+  
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "inject.js",
+        "styles.css"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Rate Limit Monitor"
+  }
+}
