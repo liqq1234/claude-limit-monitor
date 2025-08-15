@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Notification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        .debug-info {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        
+        .step {
+            background: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .error {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 通知功能调试</h1>
+        
+        <div class="step">
+            <h3>调试步骤：</h3>
+            <ol>
+                <li>打开浏览器开发者工具 (F12)</li>
+                <li>切换到 Console 标签</li>
+                <li>点击下面的测试按钮</li>
+                <li>查看控制台输出和通知</li>
+            </ol>
+        </div>
+        
+        <div>
+            <h3>测试按钮：</h3>
+            <button onclick="testBasicNotification()">测试基础通知</button>
+            <button onclick="testRateLimitDetection()">测试Rate Limit检测</button>
+            <button onclick="testBackendSend()">测试后端发送</button>
+            <button onclick="checkPermissions()">检查权限</button>
+        </div>
+        
+        <div id="debug-output" class="debug-info">等待测试...</div>
+        
+        <div class="error">
+            <h3>⚠️ 如果没有通知显示：</h3>
+            <ul>
+                <li>检查浏览器是否允许通知权限</li>
+                <li>检查扩展是否正确加载</li>
+                <li>查看控制台是否有错误信息</li>
+                <li>确认manifest.json中有notifications权限</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function log(message) {
+            const output = document.getElementById('debug-output');
+            const timestamp = new Date().toLocaleTimeString();
+            output.textContent += `[${timestamp}] ${message}\n`;
+            console.log(message);
+        }
+        
+        function clearLog() {
+            document.getElementById('debug-output').textContent = '';
+        }
+        
+        // 测试基础通知功能
+        function testBasicNotification() {
+            clearLog();
+            log('🧪 开始测试基础通知功能...');
+            
+            // 直接通过background script发送消息测试通知
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                chrome.runtime.sendMessage({
+                    type: 'TEST_NOTIFICATION',
+                    notificationType: 'test',
+                    title: '🧪 测试通知',
+                    message: '这是一个测试通知，用于验证通知功能是否正常工作'
+                }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        log('❌ 发送测试消息失败: ' + chrome.runtime.lastError.message);
+                    } else {
+                        log('✅ 测试消息已发送');
+                        log('响应: ' + JSON.stringify(response));
+                    }
+                });
+            } else {
+                log('❌ Chrome扩展API不可用');
+            }
+        }
+        
+        // 测试Rate Limit检测
+        function testRateLimitDetection() {
+            clearLog();
+            log('🚫 开始测试Rate Limit检测...');
+            
+            const orgId = 'org_debug_test_' + Date.now();
+            const resetAt = Math.floor(Date.now() / 1000) + 300;
+            
+            log(`组织ID: ${orgId}`);
+            log(`重置时间: ${resetAt} (${new Date(resetAt * 1000).toLocaleString()})`);
+            
+            // 触发rate limit检测事件
+            window.dispatchEvent(new CustomEvent('rateLimitDetected', {
+                detail: {
+                    url: `https://demo.fuclaude.com/api/organizations/${orgId}/completion`,
+                    domain: 'demo.fuclaude.com',
+                    resetAt: resetAt,
+                    status: 429,
+                    orgId: orgId,
+                    apiType: 'debug-test',
+                    timestamp: Date.now()
+                }
+            }));
+            
+            log('✅ Rate Limit事件已触发');
+            log('请查看是否有通知弹出');
+        }
+        
+        // 测试后端发送
+        function testBackendSend() {
+            clearLog();
+            log('📡 开始测试后端发送...');
+            
+            // 首先检查后端配置
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                chrome.runtime.sendMessage({
+                    type: 'GET_BACKEND_CONFIG'
+                }, (response) => {
+                    if (response && response.config) {
+                        log('后端配置: ' + JSON.stringify(response.config, null, 2));
+                        
+                        if (response.config.enabled && response.config.url) {
+                            log('✅ 后端已配置，开始测试发送...');
+                            testRateLimitDetection(); // 触发完整流程
+                        } else {
+                            log('❌ 后端未配置或未启用');
+                            log('请在扩展popup中配置后端地址');
+                        }
+                    } else {
+                        log('❌ 无法获取后端配置');
+                    }
+                });
+            }
+        }
+        
+        // 检查权限
+        function checkPermissions() {
+            clearLog();
+            log('🔍 检查扩展权限...');
+            
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                // 检查基本API
+                log('✅ chrome.runtime 可用');
+                
+                if (chrome.notifications) {
+                    log('✅ chrome.notifications API 可用');
+                    
+                    // 尝试创建一个测试通知
+                    chrome.notifications.create('test-permission', {
+                        type: 'basic',
+                        iconUrl: 'icon48.png',
+                        title: '🔍 权限测试',
+                        message: '如果你看到这个通知，说明权限正常'
+                    }, (notificationId) => {
+                        if (chrome.runtime.lastError) {
+                            log('❌ 通知创建失败: ' + chrome.runtime.lastError.message);
+                        } else {
+                            log('✅ 通知创建成功: ' + notificationId);
+                        }
+                    });
+                } else {
+                    log('❌ chrome.notifications API 不可用');
+                }
+                
+                if (chrome.storage) {
+                    log('✅ chrome.storage API 可用');
+                } else {
+                    log('❌ chrome.storage API 不可用');
+                }
+            } else {
+                log('❌ Chrome扩展环境不可用');
+                log('请确保在扩展环境中运行此页面');
+            }
+        }
+        
+        // 页面加载时的初始化
+        window.addEventListener('load', () => {
+            log('📄 调试页面已加载');
+            log('请点击测试按钮开始调试');
+            
+            // 检查是否在扩展环境中
+            if (typeof chrome === 'undefined') {
+                log('⚠️ 警告: 未检测到Chrome扩展API');
+            }
+        });
+    </script>
+</body>
+</html>

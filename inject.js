@@ -68,97 +68,67 @@
     return info;
   }
   
-  // 解析resetAt时间戳
+  // 解析resetAt时间戳 - 优化版本，只保留有效的解析方法
   function parseResetAt(response, responseData) {
     let resetAt = null;
-    
+
     try {
-      // 方法1: 从响应头获取
+      // 方法1: FuClaude格式 - 直接从响应体顶级字段获取
+      if (responseData && responseData.resetsAt) {
+        resetAt = responseData.resetsAt;
+        console.log('✅ FuClaude格式成功 - resetsAt:', resetAt);
+        return resetAt;
+      }
+
+      // 方法2: 从响应头获取 (备用方法)
       const retryAfter = response.headers.get('retry-after');
-      const rateLimitReset = response.headers.get('x-ratelimit-reset') || 
+      const rateLimitReset = response.headers.get('x-ratelimit-reset') ||
                             response.headers.get('x-rate-limit-reset') ||
                             response.headers.get('ratelimit-reset');
-      
+
       if (rateLimitReset) {
-        // 可能是Unix时间戳或相对秒数
         const resetValue = parseInt(rateLimitReset);
         if (resetValue > 1000000000) {
-          // 看起来像Unix时间戳
           resetAt = resetValue;
+          console.log('✅ 响应头Unix时间戳成功:', resetAt);
         } else {
-          // 相对秒数
           resetAt = Math.floor(Date.now() / 1000) + resetValue;
+          console.log('✅ 响应头相对秒数成功:', resetAt);
         }
-      } else if (retryAfter) {
-        // Retry-After头，通常是秒数
+        return resetAt;
+      }
+
+      if (retryAfter) {
         const retrySeconds = parseInt(retryAfter);
         if (!isNaN(retrySeconds)) {
           resetAt = Math.floor(Date.now() / 1000) + retrySeconds;
+          console.log('✅ Retry-After成功:', resetAt);
+          return resetAt;
         }
       }
       
-      // 方法2: 从响应体解析
-      if (!resetAt && responseData) {
-        // Claude API格式 (包括FuClaude)
-        if (responseData.error && responseData.error.message) {
-          try {
-            const errorMessage = JSON.parse(responseData.error.message);
-            if (errorMessage.resetsAt) {
-              resetAt = errorMessage.resetsAt;
-            }
-            // 检查其他可能的字段名
-            if (errorMessage.resetAt) {
-              resetAt = errorMessage.resetAt;
-            }
-            if (errorMessage.reset_time) {
-              resetAt = errorMessage.reset_time;
-            }
-          } catch (e) {
-            // 尝试正则匹配时间戳
-            const timestampPatterns = [
-              /resetsAt["\s:]*(\d{10})/,
-              /resetAt["\s:]*(\d{10})/,
-              /reset_time["\s:]*(\d{10})/,
-              /"reset"["\s:]*(\d{10})/
-            ];
-
-            for (const pattern of timestampPatterns) {
-              const match = responseData.error.message.match(pattern);
-              if (match) {
-                resetAt = parseInt(match[1]);
-                break;
-              }
-            }
+      // 方法3: Claude API格式 (嵌套在error.message中) - 备用方法
+      if (!resetAt && responseData && responseData.error && responseData.error.message) {
+        try {
+          const errorMessage = JSON.parse(responseData.error.message);
+          if (errorMessage.resetsAt) {
+            resetAt = errorMessage.resetsAt;
+            console.log('✅ Claude error.message.resetsAt成功:', resetAt);
+            return resetAt;
           }
-        }
-        
-        // OpenAI API格式
-        if (responseData.error && responseData.error.reset_time) {
-          resetAt = responseData.error.reset_time;
-        }
-        
-        // 通用格式检查
-        if (responseData.reset_time) {
-          resetAt = responseData.reset_time;
-        }
-        if (responseData.resetAt) {
-          resetAt = responseData.resetAt;
-        }
-        if (responseData.resetsAt) {
-          resetAt = responseData.resetsAt;
-        }
-        
-        // 检查嵌套对象
-        if (responseData.message_limit && responseData.message_limit.resetsAt) {
-          resetAt = responseData.message_limit.resetsAt;
+        } catch (e) {
+          // 忽略JSON解析错误
         }
       }
+
+      // 如果所有方法都失败
+      console.log('❌ 所有解析方法都失败');
+      return null;
       
     } catch (error) {
-      console.error('Error parsing resetAt:', error);
+      console.error('❌ 解析resetAt时发生错误:', error);
+      return null;
     }
-    
-    return resetAt;
   }
   
   // 重写fetch函数

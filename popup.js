@@ -1,13 +1,13 @@
 // Rate Limit Monitor - Popup Script
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('Popup loaded');
-  
-  const loadingEl = document.getElementById('loading');
-  const contentEl = document.getElementById('content');
-  const rateLimitsEl = document.getElementById('rate-limits');
-  const noLimitsEl = document.getElementById('no-limits');
+
+  const statusContainer = document.getElementById('status-container');
   const refreshBtn = document.getElementById('refresh-btn');
-  const clearBtn = document.getElementById('clear-btn');
+  const clearAllBtn = document.getElementById('clear-all-btn');
+  const backendUrlInput = document.getElementById('backend-url');
+  const backendEnabledCheckbox = document.getElementById('backend-enabled');
+  const saveConfigBtn = document.getElementById('save-config-btn');
   
   // 格式化时间
   function formatTime(timestamp) {
@@ -50,7 +50,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 resetTime: resetTime,
                 remainingMs: resetTime - now,
                 detectedAt: value.detectedAt,
-                url: value.url
+                url: value.url,
+                orgId: value.orgId
               };
             }
           }
@@ -64,22 +65,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 创建rate limit卡片
   function createRateLimitCard(domain, data) {
     const card = document.createElement('div');
-    card.className = 'status-card rate-limited';
+    card.className = 'status-card status-active';
     card.innerHTML = `
-      <div class="status-title">
-        <span class="emoji">🚫</span>
-        <span>${domain}</span>
-      </div>
+      <div class="domain-name">${domain}</div>
       <div class="countdown" data-reset-time="${data.resetTime}">
         ${formatRemainingTime(data.remainingMs)}
       </div>
-      <div class="status-details">
+      <div class="reset-time">
         重置时间: ${formatTime(data.resetTime)}<br>
         检测时间: ${formatTime(data.detectedAt)}
         ${data.url ? `<br>URL: ${data.url}` : ''}
+        ${data.orgId ? `<br>组织ID: ${data.orgId}` : ''}
       </div>
+      <button type="button" class="clear-btn" onclick="clearSingleRateLimit('${domain}')">清除</button>
     `;
-    
+
     return card;
   }
   
@@ -113,79 +113,116 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const rateLimits = await getAllRateLimitStatus();
       const domains = Object.keys(rateLimits);
-      
-      rateLimitsEl.innerHTML = '';
-      
+
+      statusContainer.innerHTML = '';
+
       if (domains.length === 0) {
-        noLimitsEl.style.display = 'block';
-        rateLimitsEl.style.display = 'none';
+        statusContainer.innerHTML = '<div class="no-limits">No active rate limits detected</div>';
       } else {
-        noLimitsEl.style.display = 'none';
-        rateLimitsEl.style.display = 'block';
-        
         domains.forEach(domain => {
           const card = createRateLimitCard(domain, rateLimits[domain]);
-          rateLimitsEl.appendChild(card);
+          statusContainer.appendChild(card);
         });
-        
+
         // 开始倒计时更新
         if (window.countdownInterval) {
           clearInterval(window.countdownInterval);
         }
         window.countdownInterval = setInterval(updateCountdowns, 1000);
       }
-      
+
     } catch (error) {
       console.error('Error loading rate limit status:', error);
-      rateLimitsEl.innerHTML = `
+      statusContainer.innerHTML = `
         <div class="status-card">
-          <div class="status-title">
-            <span class="emoji">❌</span>
-            <span>加载失败</span>
-          </div>
-          <div class="status-details">
-            ${error.message}
-          </div>
+          <div class="domain-name">❌ 加载失败</div>
+          <div class="reset-time">${error.message}</div>
         </div>
       `;
-    } finally {
-      loadingEl.style.display = 'none';
-      contentEl.style.display = 'block';
     }
   }
   
   // 清除所有rate limit
   async function clearAllRateLimits() {
     try {
-      const result = await chrome.storage.local.get(null);
-      const keysToRemove = [];
-      
-      for (const key of Object.keys(result)) {
-        if (key.startsWith('rateLimit_')) {
-          keysToRemove.push(key);
-        }
-      }
-      
-      if (keysToRemove.length > 0) {
-        await chrome.storage.local.remove(keysToRemove);
-        
-        // 通知background script
-        chrome.runtime.sendMessage({
-          type: 'CLEAR_ALL_RATE_LIMITS'
-        });
-        
-        // 刷新显示
-        await loadRateLimitStatus();
-      }
-      
+      // 通知background script
+      chrome.runtime.sendMessage({
+        type: 'CLEAR_ALL_RATE_LIMITS'
+      });
+
+      // 刷新显示
+      await loadRateLimitStatus();
+
     } catch (error) {
       console.error('Error clearing rate limits:', error);
+    }
+  }
+
+  // 清除单个rate limit
+  window.clearSingleRateLimit = async function(domain) {
+    try {
+      chrome.runtime.sendMessage({
+        type: 'CLEAR_RATE_LIMIT',
+        domain: domain
+      });
+
+      // 刷新显示
+      await loadRateLimitStatus();
+
+    } catch (error) {
+      console.error('Error clearing rate limit:', error);
+    }
+  }
+
+  // 加载后端配置
+  async function loadBackendConfig() {
+    try {
+      chrome.runtime.sendMessage({
+        type: 'GET_BACKEND_CONFIG'
+      }, (response) => {
+        if (response && response.config) {
+          backendUrlInput.value = response.config.url || '';
+          backendEnabledCheckbox.checked = response.config.enabled || false;
+        }
+      });
+    } catch (error) {
+      console.error('Error loading backend config:', error);
+    }
+  }
+
+  // 保存后端配置
+  async function saveBackendConfig() {
+    try {
+      const config = {
+        url: backendUrlInput.value.trim(),
+        enabled: backendEnabledCheckbox.checked
+      };
+
+      chrome.runtime.sendMessage({
+        type: 'SET_BACKEND_CONFIG',
+        config: config
+      }, (response) => {
+        if (response && response.success) {
+          // 显示保存成功提示
+          const originalText = saveConfigBtn.textContent;
+          saveConfigBtn.textContent = '✓ 已保存';
+          saveConfigBtn.style.background = '#28a745';
+
+          setTimeout(() => {
+            saveConfigBtn.textContent = originalText;
+            saveConfigBtn.style.background = '';
+          }, 2000);
+        }
+      });
+    } catch (error) {
+      console.error('Error saving backend config:', error);
     }
   }
   
   // 事件监听
   refreshBtn.addEventListener('click', loadRateLimitStatus);
-  clearBtn.addEventListener('click', clearAllRateLimits);
+  clearAllBtn.addEventListener('click', clearAllRateLimits);
+  saveConfigBtn.addEventListener('click', saveBackendConfig);
   
   // 监听storage变化
   chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -205,6 +242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   
   // 初始加载
+  await loadBackendConfig();
   await loadRateLimitStatus();
   
   // 清理定时器

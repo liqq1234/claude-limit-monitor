@@ -6,8 +6,7 @@
   "author": "Rate Limit Monitor",
   
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "background.js"
   },
   
   "content_scripts": [
@@ -30,7 +29,8 @@
   "permissions": [
     "storage",
     "activeTab",
-    "tabs"
+    "tabs",
+    "notifications"
   ],
   
   "host_permissions": [

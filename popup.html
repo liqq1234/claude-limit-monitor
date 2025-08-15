@@ -109,6 +109,73 @@
     .refresh-btn:hover {
       background: #0056b3;
     }
+
+    .config-section {
+      background: white;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      border: 1px solid #e9ecef;
+    }
+
+    .config-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #495057;
+    }
+
+    .config-input {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-bottom: 8px;
+      box-sizing: border-box;
+    }
+
+    .config-checkbox {
+      margin-right: 6px;
+    }
+
+    .config-label {
+      font-size: 12px;
+      color: #495057;
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .save-btn {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    .save-btn:hover {
+      background: #218838;
+    }
+
+    .clear-all-btn {
+      background: #dc3545;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      width: 100%;
+      margin-bottom: 12px;
+    }
+
+    .clear-all-btn:hover {
+      background: #c82333;
+    }
   </style>
 </head>
 <body>
@@ -116,14 +183,26 @@
     <h1>🚫 Rate Limit Monitor</h1>
   </div>
   
-  <button class="refresh-btn" id="refresh-btn">🔄 Refresh Status</button>
-  
+  <!-- 后端配置区域 -->
+  <div class="config-section">
+    <div class="config-title">后端配置</div>
+    <input type="url" class="config-input" id="backend-url" placeholder="后端地址 (例如: https://api.example.com/rate-limit)">
+    <label class="config-label">
+      <input type="checkbox" class="config-checkbox" id="backend-enabled">
+      启用后端发送
+    </label>
+    <button type="button" class="save-btn" id="save-config-btn">保存配置</button>
+  </div>
+
+  <button type="button" class="refresh-btn" id="refresh-btn">🔄 Refresh Status</button>
+  <button type="button" class="clear-all-btn" id="clear-all-btn">🗑️ Clear All Limits</button>
+
   <div id="status-container">
     <div class="no-limits">
       No active rate limits detected
     </div>
   </div>
-  
+
   <div class="footer">
     Monitoring API rate limits across all tabs
   </div>
